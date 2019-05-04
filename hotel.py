@@ -1,8 +1,9 @@
-#!/bin/env python
-# coding=utf-8
+# -*- coding:UTF-8 -*-
+from __future__ import print_function
 import logging
 from constants import *
 
+import sys
 TIME_LEN = 30
 
 PRICE = {
@@ -16,14 +17,18 @@ LIVED = 1
 CHK_IN = 2
 CHK_OUT = 3
 
-logger = logging.getLogger('hotel')
+logger = logging.getLogger('')
+shandler = logging.StreamHandler(sys.stdout)
 handler = logging.FileHandler(
-    "./hotel_log", mode='a', encoding='utf-8', delay=False)
+    "hotellog")
 formatter = logging.Formatter(
     '[%(asctime)s][%(levelname)s][%(message)s][%(filename)s:%(lineno)d,%(funcName)s][pid:%(process)d(%(processName)s),tid:%(thread)d(%(threadName)s)]')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+#handler.setFormatter(formatter)
+#logger.addHandler(handler)
+shandler.setFormatter(formatter)
+logger.addHandler(shandler)
 
+print("seraf")
 
 class RoomMgr(object):
     def __init__(self):
@@ -35,6 +40,15 @@ class RoomMgr(object):
         }
         self.users = []
         self.orders = []
+        global logger
+
+
+    def check_uid(self, uid):
+        if uid >= 1 and uid <= 100:
+            return True
+        else:
+            print("invalid uid {}".format(uid))
+            return False
 
     def get_user(self, uid):
         for u in self.users:
@@ -58,14 +72,17 @@ class RoomMgr(object):
         return sales
         
     def order(self, uid, room_type, begin, end, count, now):
+        print("uid:{} room_type:{} begin:{} end:{} count:{} now:{}".format(uid, room_type, begin, end, count, now))
         if count > 10:
-            logger.error("not enough room for {}".format(count))
+            print("not enough room for {}".format(count))
             return E001
         if count <= 0:
-            logger.error('invalid count:{}'.format(count))
+            print('invalid count:{}'.format(count))
             return E001
 
         if not self.check_time(now, begin, end):
+            return E001
+        if not self.check_uid(uid):
             return E001
         rooms = []
         order = Order(self.get_user(uid),  begin, end, count)
@@ -81,33 +98,35 @@ class RoomMgr(object):
         return S001
 
     def unorder(self, uid, now):
+        if not self.check_uid(uid):
+            return E001
         u = self.get_user(uid)
         u.CheckOut(now)
         return S002
 
     def check_time(self, now, begin=0, end=29):
         if begin < 0:
-            logger.error('begin time:{} cant less than 0'.format(
+            print('begin time:{} cant less than 0'.format(
                 begin))
             return False
         if end > 29:
-            logger.error('end time:{} cant bigger than 29'.format(
+            print('end time:{} cant bigger than 29'.format(
                 begin))
             return False
         if now < self.sys_time:
-            logger.error('operate time({}) cannot less than sys_time({})'.format(
+            print('operate time({}) cannot less than sys_time({})'.format(
                 now, self.sys_time))
             return False
         if begin > end:
-            logger.error('begin time({}) cannot bigger than end time({})'.format(
+            print('begin time({}) cannot bigger than end time({})'.format(
                 begin, end))
             return False
         if now > end:
-            logger.error('oprate time({}) cannot bigger than end time({})'.format(
+            print('oprate time({}) cannot bigger than end time({})'.format(
                 now, end))
             return False
         if now < begin:
-            logger.error('oprate time({}) cannot less than begin time({})'.format(
+            print('oprate time({}) cannot less than begin time({})'.format(
                 now, begin))
             return False
         return True
@@ -117,15 +136,27 @@ class RoomMgr(object):
             return False
         return True
 
-    def get_status(self, now, room_type):
+    def get_status(self, now, room_type, status):
+        print('get_status now:{} room_type:{} status({})'.format(now, room_type, status))
         if not self.check_room_type(room_type):
-            logger.error("invalid room type:{}".format(room_type))
+            print("invalid room type:{}".format(room_type))
             return E001
         if not self.check_time(now):
             return E001
-        out = ""
+        if status != "used" and status != "free" and status != None:
+            print('invalid status({})'.format(status))
+            return E001
+        if status == None:
+            tmp_status = "used,free"
+            print('status({}) convert to {}'.format(status, tmp_status))
+        else:
+            tmp_status = status
+        out = []
         for r in self.rooms[room_type]:
-            out += r.print_status(now) + "\r\n"
+            status_output = r.print_status(now, tmp_status)
+            if status_output:
+                print('get status:{}'.format(status_output))
+                out.append(status_output)
         return out
 
 
@@ -167,7 +198,7 @@ class Status(object):
         if user.id in self.uids:
             self.uids.remove(user.id)
         else:
-            logger.error('no uid:{} in status'.format(user.id))
+            print('no uid:{} in status'.format(user.id))
 
 
 class Room(object):
@@ -181,31 +212,30 @@ class Room(object):
     def get_sales(self, now):
         sales = 0
         for o in self.orders:
-            print o.__dict__
             sales += o.get_sale_days(now)*self.price
         return sales
 
     def can_order(self, order):
         if self.status[order.begin].status == LIVED:
-            logger.error(
+            print(
                 'cant order because day:{} already lived by:{}'.format(order.begin, self.status[order.begin].uids))
             return False
         if self.status[order.begin].status == CHK_IN:
-            logger.error(
+            print(
                 'cant order because day:{} already in check_in status by:{}'.format(order.begin, self.status[order.begin].uids))
             return False
         if self.status[order.end].status == LIVED:
-            logger.error(
+            print(
                 'cant order because day:{} already in lived status by:{}'.format(order.end, self.status[order.begin].uids))
             return False
         if self.status[order.end].status == CHK_OUT:
-            logger.error(
+            print(
                 'cant order because day:{} already in check out status by:{}'.format(order.end, self.status[order.begin].uids))
             return False
 
         for t in range(order.begin+1, order.end):
             if self.status[t].status != EMPTY:
-                logger.error('cant order because {} already in check {} status by:{}'.format(
+                print('cant order because {} already in check {} status by:{}'.format(
                     order.end, str(self.status[t]), self.status[order.begin].uids))
                 return False
         return True
@@ -232,10 +262,15 @@ class Room(object):
             self.status[t].status = EMPTY
             self.status[t].rm_user(order.user)
 
-    def print_status(self, now):
-        for s in self.status:
-            return "{} {} {} {}".format(
-                self.id, self.room_type, now, s.print_status())
+    def print_status(self, now, status):
+        s = self.status[now]
+        #print(s.__dict__)
+        if "free" in status and (s.status == LIVED or s.status == CHK_IN or s.status == CHK_OUT):
+            return
+        if "used" in status and s.status == EMPTY:
+            return
+        return "{} {} {} {}".format(
+            self.id, self.room_type, now, s.print_status())
 
 
 class User(object):
@@ -276,11 +311,64 @@ class Order(object):
         if self.end > now:
             end = now
         pay_days = end - self.begin
-        logger.info('order({}) have to pay:{} days'.format(str(self), pay_days))
+        print('order({}) have to pay:{} days'.format(str(self), pay_days))
         return pay_days
 
 
-if __name__ == "__main__":
-    r = RoomMgr()
-    print r.order(1, "A", 0, 30, 10, 1)
-    print r.order(1, "A", 0, 30, 10, 1)
+class OrderHotelSystem(object):
+    '''
+        说明：
+        （1）考生需要根据考题要求，实现相应的接口。可以根据需要增加变量或方法。
+        （2）constants.py文件中已经预定义了一些常量值，测试用例会引用这些常量。涉及到这些常量，考生应该直接引用。
+        （3）接口返回成功或失败代码时，请直接返回预定义的常量。如：return constants.E002
+    '''
+
+    '''以下是考生需要实现的接口'''
+    def resetSystem(self):
+        '''
+            功能接口：系统初始化
+        '''
+        
+        self.isInit = True
+        self.mgr = RoomMgr()
+        return S000
+
+    def inputOrderInfo(self, userId, roomType, currentTime, beginTime, endTime, count):
+        '''
+            功能接口：录入客户预订信息
+        '''
+        
+        if not self.isInit:
+            return E001
+        return self.mgr.order(userId, roomType, beginTime-1, endTime-1, count, currentTime-1)
+
+    def inputCheckOutInfo(self, userId, currentTime):
+        '''
+            功能接口：录入客户退房信息
+        '''
+        
+        if not self.isInit:
+            return E001
+        return self.mgr.unorder(userId, currentTime-1)
+
+
+    def queryRoomInfo(self, queryTime, roomType, status=None):
+        '''
+            功能接口：根据状态查询房间信息
+            说明：
+                当查询记录不存在的时候返回“S003:没有任何记录”
+                如果查询记录存在，按返回列表如：["101 A used 2,3","104 A free --"]
+        '''
+        if not self.isInit:
+            return E001
+        return self.mgr.get_status(queryTime-1, roomType, status)
+                
+                
+    def querySales(self, queryTime):
+        '''
+            功能接口：查询系统某一时刻的营业额
+        '''
+                
+        if not self.isInit:
+            return E001
+        return self.mgr.get_sales(queryTime-1)
