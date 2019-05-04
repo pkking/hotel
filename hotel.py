@@ -1,11 +1,8 @@
 #!/bin/env python
 # coding=utf-8
 import logging
-E001 = u"参数错误"
-E002 = u"房间已满"
+from constants import *
 
-S001 = u"预定成功"
-S002 = u"退房成功"
 TIME_LEN = 30
 
 PRICE = {
@@ -80,7 +77,6 @@ class RoomMgr(object):
             rooms.append(r)
         for r in self.rooms[room_type]:
             order.rooms.append(r)
-            r.orders.append(r)
             r.order(order)
         return S001
 
@@ -185,7 +181,9 @@ class Room(object):
     def get_sales(self, now):
         sales = 0
         for o in self.orders:
-            sales += o.get_sale(now)
+            print o.__dict__
+            sales += o.get_sale_days(now)*self.price
+        return sales
 
     def can_order(self, order):
         if self.status[order.begin].status == LIVED:
@@ -270,6 +268,16 @@ class Order(object):
     def cancel(self, now):
         for r in self.rooms:
             r.unorder(self, now)
+
+    def __repr__(self):
+        return "order:begin:{} end:{} uid:{}".format(self.begin, self.end, self.user.id)
+
+    def get_sale_days(self, now):
+        if self.end > now:
+            end = now
+        pay_days = end - self.begin
+        logger.info('order({}) have to pay:{} days'.format(str(self), pay_days))
+        return pay_days
 
 
 if __name__ == "__main__":
