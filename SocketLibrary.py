@@ -13,7 +13,7 @@ class SocketLibrary:
 
     def __init__(self):
         self.tcpTimeout = 1
-        self.tcpSock = socket(AF_INET, SOCK_STREAM)
+        self.tcpSock = socket(AF_INET, SOCK_DGRAM)
 
         self.tcpSock.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack('LL', self.tcpTimeout, 0))
         self.tcpSock.settimeout(self.tcpTimeout)
@@ -31,7 +31,8 @@ class SocketLibrary:
 
         data = self.tcpSock.recv(1024)
         data = data.strip()
-        data = unicode(data, 'gbk').encode('utf8')
+        #data = unicode(data, 'gbk').encode('utf8')
+        data = data.encode('utf8')
 
         # tcpSock.close()
         return data
